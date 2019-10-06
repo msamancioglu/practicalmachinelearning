@@ -1,0 +1,125 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "MUSTAFA SAMANCIOGLU"
+date: "10/6/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Exectutive Summary
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+### Purpose of the analysis
+This report will use data recorded using accelerometers placed on six individuals performing barbell lifts both correctly and incorrectly to build a machine learning algorithm to then make predictions on future data sets. 
+Given data from accelerometers, the goal is to predict the class of action which is one of the following.
+
+* Exactly according to the specification (A)
+* Throwing elbows to the front (B)
+* Lifting the dumbbell only halfway (C)
+* Lowering the dumbbell only halfway (D)
+* Throwing the hips to the front (E).
+
+### Steps of Analysis
+
+The original training and testing data have 160 variables. 
+In the first step,  columns with NA majority are removed, which brought the number of variables down to 60. 
+Then removed 7 additional variables which deemed not useful for analysis are removed: "X, user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp, new_window, num_window". In the last phase of the feature selection predictors with near zero or zero variance are  identified and removed.Finally 53 predictor variables remained. After feature selection, original training data split into two sets: “training2” data set for training the model (60%), and “Validation” data set for validation of the model (40%). For reproducibility, seed set to 214. A random forest classification  model was I trained on “training2” with 10-fold cross validation and 3 repeats. Random forest model chosen because of high accuracy and speed on small data sets. Accuracy of model was very high on both "training2" (%100) and "validation" (%99.3) data sets. Finally, trained model was applied to the testing data set consisting 20 cases.
+
+
+### Loading Packages 
+
+```{r results='hide', message=FALSE, warning=FALSE}
+library(caret)
+library(randomForest)
+set.seed(214)
+
+```
+### Downloading files from the urls provided
+```{r }
+if(!file.exists("training.csv")){
+  train_url <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(url=train_url, destfile="training.csv")
+}
+if(!file.exists("testing.csv")){
+  test_url <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url=test_url, destfile="testing.csv")
+}
+```
+### Loading and Cleaning Data
+```{r}
+training <- read.csv("training.csv", na.strings = c("NA", "#DIV/0!", ""))
+testing  <- read.csv("testing.csv", na.strings = c("NA", "#DIV/0!", ""))
+
+# remove NA columns for the training and testing data
+comps <- complete.cases(t(training)) & complete.cases(t(testing))
+training <- training[,comps]
+testing  <- testing[,comps]
+
+# remove columns with data that isn't useful
+training <- subset(training, select = -which(names(training) %in% c("X","user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp","new_window", "num_window")))
+testing  <- subset(testing, select = -which(names(testing) %in% c("X","user_name", "raw_timestamp_part_1", "raw_timestamp_part_2", "cvtd_timestamp","new_window","num_window")))
+
+#determining near zero/zero variance predictors
+nzVars <- nearZeroVar(training, saveMetrics = TRUE)
+
+# removing zero variance and near zero variance predictors
+training = training[, (nzVars$zeroVar + nzVars$nzv) < 1 ]
+testing = testing[, (nzVars$zeroVar + nzVars$nzv) < 1 ]
+
+dim(training)
+dim(testing)
+
+```
+
+### Splitting original training data into two sub chunks : 
+* training set (%60)
+* validation set (%40)
+
+```{r}
+inTrain <- createDataPartition(training$classe, p=0.6, list=FALSE)
+training2 <- training[inTrain,]
+validation <- training[-inTrain,]
+
+```
+
+### Fitting model
+Fit a model using random forest classification algorith with 10-fold cross validation and 3 repeats
+
+```{r}
+modFit <- randomForest(classe~., trControl=trainControl(method = "cv", number = 10, repeats = 3), data=training2)
+```
+
+### Predicting and evaluating accuracy on training set
+```{r}
+# the results on the training set
+predTraining2 <- predict(modFit, training2,  type = "class")
+confusionMatrix(training2$classe, predTraining2)
+```
+### Predicting and evaluating accuracy on validation set
+
+```{r}
+# the results on the validation set 
+predValidation <- predict(modFit, newdata=validation,  type = "class")
+confusionMatrix(validation$classe, predValidation)
+
+```
+### Predicting on Test set
+```{r}
+# the results on the test set
+predTesting <- predict(modFit, newdata=testing,  type = "class")
+predTesting
+```
+
+## Conclusions
+
+The accuracy of the model is 0.994. The expected out-of-sample error is estimated at 0.006, or 0.6%. 
+Random forest model is found higly accurate for this data set. 
+So, final predictions on Test set are based on random forest model.
+
+
